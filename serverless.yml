@@ -1,0 +1,71 @@
+service: winter-alerts
+
+provider:
+  name: aws
+  profile: edHome
+  region: 'eu-west-1'
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - SES:SendRawEmail
+        - SES:SendEmail
+      Resource: "*"
+  ecr:
+    images:
+      img:
+        path: ./
+        platform: linux/amd64
+
+functions:
+  weather:
+    runtime: python3.9
+    handler: weather.handler
+
+  ukc_scrape:
+    timeout: 60
+    # If you experience any errors such as Chrome crashing or not being available you might need to increase the storage available to your Lambda Function. See #102
+    memorySize: 2048
+    image:
+      name: img
+
+  process:
+    runtime: python3.9
+    handler: process.handler
+
+  notify:
+    runtime: nodejs18.x
+    handler: notify.handler
+
+stepFunctions:
+  stateMachines:
+    orchestrate:
+      events:
+        - http:
+            path: /report
+            method: GET
+            cors: true
+        - schedule: cron(0 17 * JAN,FEB,MAR,APR,SEP,DEC ? *)
+      definition:
+        Comment: "Scrape recent ascents data, collect weather data, process and then notify."
+        StartAt: UkcScrape
+        States:
+          UkcScrape:
+            Type: Task
+            Resource: "arn:aws:lambda:${aws:region}:${aws:accountId}:function:winter-alerts-dev-ukc_scrape"
+            Next: Weather
+          Weather:
+            Type: Task
+            Resource: "arn:aws:lambda:${aws:region}:${aws:accountId}:function:winter-alerts-dev-weather"
+            Next: Process
+          Process:
+            Type: Task
+            Resource: "arn:aws:lambda:${aws:region}:${aws:accountId}:function:winter-alerts-dev-process"
+            Next: Notify
+          Notify:
+            Type: Task
+            Resource: "arn:aws:lambda:${aws:region}:${aws:accountId}:function:winter-alerts-dev-notify"
+            End: true    
+
+
+plugins:
+  - serverless-step-functions
