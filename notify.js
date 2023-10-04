@@ -2,6 +2,7 @@
 // import AWS from 'aws-sdk';
 // let ses = new AWS.SES();
 
+
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 const ses = new SESClient({ region: "eu-west-1" });
 
@@ -13,11 +14,11 @@ const sendEmail = async (event) => {
         Message: {
           Body: {
             Text: {
-              Data: event.report
+              Data: JSON.stringify(event.report, null, 2)
             }
           },
           Subject: {
-            Data: "test subject"
+            Data: "WinterAlert report"
           }
         },
         Source: process.env.FROM

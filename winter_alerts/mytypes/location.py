@@ -6,3 +6,4 @@ class Location(TypedDict):
     lon: float
     # "above sea level"
     asl: int
+    crag_id: str

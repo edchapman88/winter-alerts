@@ -25,15 +25,19 @@ def handler(event=None, context=None):
 
     driver = webdriver.Chrome(options=options, service=service)
     driver.implicitly_wait(10)
-    driver.get("https://www.ukclimbing.com/logbook/crags/ben_nevis-16877/#ascents")
+    ascents = {}
+    for location in event['locations']:
+        driver.get(f"https://www.ukclimbing.com/logbook/crags/{location['crag_id']}/#ascents")
 
-    WebDriverWait(driver, 10, poll_frequency=2).until(EC.visibility_of(driver.find_element(By.XPATH, '//*[@id="ascents"]/div[2]/table/tbody')))
-    table = driver.find_element(By.XPATH, '//*[@id="ascents"]/div[2]/table/tbody')
-    data = []
-    for row in table.find_elements(By.TAG_NAME, 'tr'):
-        row_data = {}
-        for (id,cell) in zip(['route','grade','style','climber','date'],row.find_elements(By.TAG_NAME, 'td')):
-            row_data[id] = cell.text.replace("\n"," ")
-        data.append(row_data)
-
-    return {"scrape":data}
+        WebDriverWait(driver, 10, poll_frequency=2).until(EC.visibility_of(driver.find_element(By.XPATH, '//*[@id="ascents"]/div[2]/table/tbody')))
+        table = driver.find_element(By.XPATH, '//*[@id="ascents"]/div[2]/table/tbody')
+        data = []
+        for row in table.find_elements(By.TAG_NAME, 'tr'):
+            row_data = {}
+            for (id,cell) in zip(['route','grade','style','climber','date'],row.find_elements(By.TAG_NAME, 'td')):
+                if id in ['route', 'grade', 'date']:
+                    row_data[id] = cell.text.replace("\n"," ")
+            data.append(row_data)
+        ascents[location["name"]] = data
+        
+    return {"scrape":ascents}

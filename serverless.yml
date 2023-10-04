@@ -10,6 +10,17 @@ provider:
         - SES:SendRawEmail
         - SES:SendEmail
       Resource: "*"
+    - Effect: Allow
+      Action:
+        - dynamodb:DescribeTable
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource:
+        - "Fn::GetAtt": [weatherHistory, Arn]
   ecr:
     images:
       img:
@@ -19,7 +30,7 @@ provider:
 functions:
   weather:
     runtime: python3.9
-    handler: weather.handler
+    handler: winter_alerts.weather.handler
 
   ukc_scrape:
     timeout: 60
@@ -30,7 +41,11 @@ functions:
 
   process:
     runtime: python3.9
-    handler: process.handler
+    handler: winter_alerts.process.handler
+
+  init_config:
+    runtime: python3.9
+    handler: winter_alerts.init_config.handler
 
   notify:
     runtime: nodejs18.x
@@ -47,8 +62,12 @@ stepFunctions:
         - schedule: cron(0 17 * JAN,FEB,MAR,APR,SEP,DEC ? *)
       definition:
         Comment: "Scrape recent ascents data, collect weather data, process and then notify."
-        StartAt: UkcScrape
+        StartAt: InitConfig
         States:
+          InitConfig:
+            Type: Task
+            Resource: "arn:aws:lambda:${aws:region}:${aws:accountId}:function:winter-alerts-dev-init_config"
+            Next: UkcScrape
           UkcScrape:
             Type: Task
             Resource: "arn:aws:lambda:${aws:region}:${aws:accountId}:function:winter-alerts-dev-ukc_scrape"
@@ -66,6 +85,25 @@ stepFunctions:
             Resource: "arn:aws:lambda:${aws:region}:${aws:accountId}:function:winter-alerts-dev-notify"
             End: true    
 
+resources:
+  Resources:
+    weatherHistory:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: weatherHistory
+        AttributeDefinitions:
+          - AttributeName: pk
+            AttributeType: S
+          - AttributeName: timestamp
+            AttributeType: N
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+          - AttributeName: timestamp
+            KeyType: RANGE
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
 
 plugins:
   - serverless-step-functions
